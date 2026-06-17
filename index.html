@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>AI Home Lab — Topology (public)</title>
+<style>
+  :root{
+    --bg:#0f1623; --panel:#172033; --ink:#e8eef7; --muted:#8aa0bd;
+    --line:#33425f; --accent:#4da3ff; --win:#76d275; --mac:#a0a0a0;
+    --pi:#ff6f91; --dash:#ffc13b; --tailscale:#9b8cff; --dim:0.16;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+       background:var(--bg);color:var(--ink)}
+  header{padding:18px 22px 8px}
+  h1{margin:0;font-size:20px}
+  .sub{color:var(--muted);font-size:13px;margin-top:4px}
+  .wrap{display:flex;flex-wrap:wrap;gap:16px;padding:14px 22px 28px}
+  .stage{flex:2 1 560px;min-width:340px;background:var(--panel);border-radius:14px;padding:10px}
+  .side{flex:1 1 300px;min-width:260px;background:var(--panel);border-radius:14px;padding:16px}
+  svg{width:100%;height:auto;display:block}
+  .controls{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 14px}
+  .controls button{background:#1d2942;color:var(--ink);border:1px solid var(--line);
+       border-radius:8px;padding:6px 9px;font-size:12px;cursor:pointer;transition:.15s}
+  .controls button:hover{border-color:var(--accent)}
+  .controls button.active{background:var(--accent);border-color:var(--accent);color:#06203d;font-weight:700}
+  .phase-label{width:100%;color:var(--muted);font-size:11px;text-transform:uppercase;
+       letter-spacing:.06em;margin:8px 0 2px}
+  .node{transition:opacity .25s, filter .25s}
+  .node.dim{opacity:var(--dim)}
+  .edge{transition:opacity .25s, stroke-width .2s}
+  .edge.dim{opacity:.08}
+  .edge.on{stroke:var(--accent);stroke-width:3}
+  .legend{display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:var(--muted);padding:2px 22px 18px}
+  .legend span{display:inline-flex;align-items:center;gap:5px}
+  .dot{width:10px;height:10px;border-radius:50%}
+  .side h2{font-size:15px;margin:0 0 2px}
+  .side .focus{font-size:13px;color:var(--muted);margin:0 0 12px}
+  .side .k{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:12px 0 4px}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{background:#1d2942;border:1px solid var(--line);border-radius:20px;padding:3px 10px;font-size:12px}
+  .file{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--accent)}
+</style>
+</head>
+<body>
+<header>
+  <h1>AI Inferencing Home Lab — Live Topology</h1>
+  <div class="sub">Windows RTX 3080 Ti (12 GB) inference server · Mac + 2× Raspberry Pi 4 (AnythingLLM) + iPhone (LM mini) clients · Raspberry Pi 4 NextCloud + external SSD · Wi-Fi/LAN + Tailscale. Pick a lab to see what's active.</div>
+</header>
+
+<div class="legend">
+  <span><span class="dot" style="background:var(--win)"></span>Windows server (GPU)</span>
+  <span><span class="dot" style="background:var(--mac)"></span>Mac / iPhone clients</span>
+  <span><span class="dot" style="background:var(--pi)"></span>Raspberry Pi 4 (clients + NextCloud)</span>
+  <span><span class="dot" style="background:var(--dash)"></span>Google dashboard</span>
+  <span><span class="dot" style="background:var(--tailscale)"></span>Tailscale overlay</span>
+</div>
+
+<div class="wrap">
+  <div class="stage">
+    <svg viewBox="0 0 1040 700" xmlns="http://www.w3.org/2000/svg" aria-label="home lab topology">
+      <!-- edges -->
+      <g stroke="var(--line)" stroke-width="2" fill="none">
+        <line class="edge" data-edge="mac-router"   x1="250" y1="250" x2="490" y2="395"/>
+        <line class="edge" data-edge="pi1-router"   x1="240" y1="360" x2="480" y2="405"/>
+        <line class="edge" data-edge="pi2-router"   x1="250" y1="470" x2="485" y2="420"/>
+        <line class="edge" data-edge="iphone-router" x1="400" y1="600" x2="500" y2="450"/>
+        <line class="edge" data-edge="win-router"    x1="800" y1="245" x2="565" y2="400"/>
+        <line class="edge" data-edge="ncpi-router"   x1="800" y1="520" x2="565" y2="430"/>
+        <line class="edge" data-edge="dash-router"   x1="520" y1="180" x2="520" y2="385"/>
+        <path class="edge" data-edge="tailscale" stroke="var(--tailscale)" stroke-dasharray="7 6"
+              d="M150,300 C300,120 760,110 880,210"/>
+        <path class="edge" data-edge="tailscale2" stroke="var(--tailscale)" stroke-dasharray="7 6"
+              d="M150,470 C320,650 760,650 880,560"/>
+      </g>
+
+      <!-- Google dashboard -->
+      <g class="node" data-node="dash">
+        <rect x="425" y="92" width="190" height="60" rx="12" fill="#2a2410" stroke="var(--dash)" stroke-width="2"/>
+        <text x="520" y="118" text-anchor="middle" fill="var(--dash)" font-size="14" font-weight="700">Google Site</text>
+        <text x="520" y="138" text-anchor="middle" fill="var(--muted)" font-size="11">dashboard &amp; write-ups</text>
+      </g>
+
+      <!-- Router -->
+      <g class="node" data-node="router">
+        <rect x="445" y="386" width="120" height="62" rx="12" fill="#13243d" stroke="var(--accent)" stroke-width="2"/>
+        <text x="505" y="414" text-anchor="middle" fill="var(--accent)" font-size="13" font-weight="700">Wi-Fi / LAN</text>
+        <text x="505" y="432" text-anchor="middle" fill="var(--muted)" font-size="11">home router</text>
+      </g>
+
+      <!-- Windows server -->
+      <g class="node" data-node="win">
+        <rect x="700" y="158" width="310" height="158" rx="14" fill="#12251a" stroke="var(--win)" stroke-width="2.5"/>
+        <text x="720" y="182" fill="var(--win)" font-size="13" font-weight="700">Windows PC — RTX 3080 Ti (12 GB)</text>
+        <text x="720" y="201" fill="var(--muted)" font-size="10.5">INFERENCE SERVER · Ryzen 5 5600X · 32 GB · Win 11</text>
+        <text x="720" y="219" fill="var(--muted)" font-size="11.5">LM Studio · Ollama · vLLM</text>
+        <text x="720" y="237" fill="var(--muted)" font-size="11">Qwen2.5-Coder-7B (Q4_K_M) · Vector DB · Neo4j</text>
+        <text x="720" y="255" fill="var(--muted)" font-size="11.5">nvidia-smi (telemetry)</text>
+      </g>
+
+      <!-- Mac -->
+      <g class="node" data-node="mac">
+        <rect x="55" y="166" width="200" height="92" rx="14" fill="#20242b" stroke="var(--mac)" stroke-width="2.5"/>
+        <text x="75" y="190" fill="#dfe6ef" font-size="14" font-weight="700">MacBook Pro (M1)</text>
+        <text x="75" y="210" fill="var(--muted)" font-size="11">AnythingLLM · Wireshark · bench.py</text>
+      </g>
+
+      <!-- Pi 1 PLUM -->
+      <g class="node" data-node="pi1">
+        <rect x="35" y="316" width="210" height="62" rx="12" fill="#2b1620" stroke="var(--pi)" stroke-width="2"/>
+        <text x="55" y="340" fill="var(--pi)" font-size="13" font-weight="700">Raspberry Pi 4 — PLUM</text>
+        <text x="55" y="360" fill="var(--muted)" font-size="11">AnythingLLM client</text>
+      </g>
+
+      <!-- Pi 2 BLUE -->
+      <g class="node" data-node="pi2">
+        <rect x="55" y="430" width="210" height="62" rx="12" fill="#2b1620" stroke="var(--pi)" stroke-width="2"/>
+        <text x="75" y="454" fill="var(--pi)" font-size="13" font-weight="700">Raspberry Pi 4 — BLUE</text>
+        <text x="75" y="474" fill="var(--muted)" font-size="10">AnythingLLM · pi_continuous_load.py</text>
+      </g>
+
+      <!-- iPhone -->
+      <g class="node" data-node="iphone">
+        <rect x="330" y="560" width="160" height="80" rx="12" fill="#20242b" stroke="var(--mac)" stroke-width="2"/>
+        <text x="410" y="592" text-anchor="middle" fill="#dfe6ef" font-size="13" font-weight="700">iPhone</text>
+        <text x="410" y="612" text-anchor="middle" fill="var(--muted)" font-size="11">LM mini (client)</text>
+      </g>
+
+      <!-- NextCloud Pi -->
+      <g class="node" data-node="ncpi">
+        <rect x="700" y="466" width="310" height="158" rx="14" fill="#2b1620" stroke="var(--pi)" stroke-width="2.5"/>
+        <text x="720" y="490" fill="var(--pi)" font-size="14" font-weight="700">Orange-pie — Home Cloud</text>
+        <text x="720" y="510" fill="var(--muted)" font-size="11.5">NextCloud + external SSD</text>
+        <text x="720" y="528" fill="var(--muted)" font-size="11.5">documents &amp; pictures (RAG corpus)</text>
+        <text x="720" y="546" fill="var(--muted)" font-size="11.5">vector DB / Context Chat (option)</text>
+        <text x="720" y="586" fill="#ffb37a" font-size="10.5">⚠ different subnet → reach over Tailscale</text>
+        <text x="720" y="606" fill="var(--muted)" font-size="10.5">Windows GPU does embeddings + inference</text>
+      </g>
+
+      <!-- tailscale label -->
+      <text x="520" y="138" text-anchor="middle" fill="var(--tailscale)" font-size="11" opacity="0.9"
+            class="node" data-node="tailscale" style="display:none">Tailscale</text>
+    </svg>
+  </div>
+
+  <div class="side">
+    <div class="controls" id="controls"></div>
+    <h2 id="t-title">Full topology</h2>
+    <p class="focus" id="t-focus">Select a lab to highlight the devices, links, and tools it exercises.</p>
+    <div class="k">Active components</div>
+    <div class="chips" id="t-chips"></div>
+    <div class="k">Tool / file</div>
+    <div class="file" id="t-file">—</div>
+  </div>
+</div>
+
+<script>
+const ALLCLIENTS = ["mac","pi1","pi2","iphone"];
+const LABS = {
+  "0":{t:"0 Live Dashboard First (start here)",f:"PLUM + BLUE + Mac all stream continuous LLM requests; KPIs post live to the Google dashboard. Validates the whole pipeline.",n:["pi1","pi2","mac","win","router","dash","tailscale2"],e:["pi1-router","pi2-router","mac-router","win-router","dash-router","tailscale2"],c:["Pi PLUM","Pi BLUE","Mac","Windows GPU","Google Site (live)"],file:"pi_continuous_load.py --device"},
+  "0.1":{t:"0.1 Host model (LM Studio)",f:"Load Qwen2.5-Coder-7B on the Windows GPU and start the local server.",n:["win","router"],e:["win-router"],c:["Windows GPU","LM Studio"],file:"Implementation_Guide.md §0.1"},
+  "0.2":{t:"0.2 Connect all clients",f:"Mac (AnythingLLM), 2× Pi 4 (AnythingLLM), and iPhone (LM mini) all reach the Windows API.",n:["win","mac","pi1","pi2","iphone","router"],e:["win-router","mac-router","pi1-router","pi2-router","iphone-router"],c:["All clients","Wi-Fi/LAN","Windows API"],file:"AnythingLLM / LM mini"},
+  "0.3":{t:"0.3 Measurement harness",f:"bench.py on the Mac records TTFT/TPOT/latency from the server.",n:["mac","win","router"],e:["mac-router","win-router"],c:["Mac","Windows GPU"],file:"bench.py"},
+  "1.1":{t:"1.1 Baseline KPIs",f:"Single + concurrent runs to baseline TTFT/TPOT.",n:["mac","win","router"],e:["mac-router","win-router"],c:["Mac","Windows GPU"],file:"bench.py --concurrency"},
+  "1.2":{t:"1.2 Quantization sweep",f:"Compare Q4/Q5/Q8 on the server — VRAM, speed, quality.",n:["win"],e:[],c:["Windows GPU"],file:"LM Studio quants"},
+  "1.3":{t:"1.3 KV cache / context ceiling",f:"Raise context length, watch VRAM on the server.",n:["win"],e:[],c:["Windows GPU"],file:"LM Studio context len"},
+  "1.4":{t:"1.4 Prefill vs decode",f:"Vary input/output length from the Mac harness.",n:["mac","win","router"],e:["mac-router","win-router"],c:["Mac","Windows GPU"],file:"bench.py --max-tokens"},
+  "1.5":{t:"1.5 Sampling params",f:"Sweep temperature/top_p/top_k/max_tokens.",n:["mac","win","router"],e:["mac-router","win-router"],c:["Mac","Windows GPU"],file:"bench.py (edit body)"},
+  "1.6":{t:"1.6 Token science",f:"Read the usage block; compare token counts.",n:["mac","win","router"],e:["mac-router","win-router"],c:["Mac","Windows GPU"],file:"usage JSON"},
+  "2.1":{t:"2.1 GPU heartbeat",f:"nvidia-smi on the server during generation.",n:["win"],e:[],c:["Windows GPU"],file:"nvidia-smi -l 1"},
+  "2.2":{t:"2.2 Memory stalls",f:"nvidia-smi dmon — low sm% while mem% high = stall.",n:["win"],e:[],c:["Windows GPU"],file:"nvidia-smi dmon"},
+  "2.3":{t:"2.3 CPU / power / thermal",f:"CPU role + power/thermal envelope on the server.",n:["win"],e:[],c:["Windows GPU","CPU"],file:"nvidia-smi --query-gpu"},
+  "3.1":{t:"3.1 Capture the conversation",f:"Wireshark on the Mac sees the long-lived TCP token stream.",n:["mac","win","router"],e:["mac-router","win-router"],c:["Mac (Wireshark)","Windows GPU"],file:"Wireshark filter"},
+  "3.2":{t:"3.2 TCP vs QUIC, bandwidth",f:"Compare local TCP API vs a web tool's QUIC; measure up/down.",n:["mac","win","router","dash"],e:["mac-router","win-router","dash-router"],c:["Mac","Windows","Internet"],file:"Wireshark Conversations"},
+  "3.3":{t:"3.3 Network-inclusive TTFT",f:"Diff POST vs first response segment in the capture.",n:["mac","win","router"],e:["mac-router","win-router"],c:["Mac","Windows GPU"],file:"Wireshark timing"},
+  "4.1":{t:"4.1 Engine bake-off",f:"LM Studio vs Ollama vs vLLM on the same model.",n:["win","mac","router"],e:["win-router","mac-router"],c:["Windows GPU","Mac"],file:"Ollama / vLLM"},
+  "4.2":{t:"4.2 Continuous batching",f:"Ramp concurrency on vLLM; find capacity per GPU.",n:["win","mac","router"],e:["win-router","mac-router"],c:["Windows GPU","Mac"],file:"bench.py / Locust"},
+  "4.3":{t:"4.3 SLO, knee & failures",f:"Push past the latency knee; failure drills.",n:["win","mac","router"],e:["win-router","mac-router"],c:["Windows GPU","Mac"],file:"bench.py"},
+  "4.4":{t:"4.4 Continuous load from a Pi 4",f:"A Pi 4 fires a sustained stream; Mac captures via Tailscale/LAN. Posts live to the dashboard.",n:["pi2","win","router","mac","dash","tailscale2"],e:["pi2-router","win-router","mac-router","dash-router","tailscale2"],c:["Raspberry Pi 4","Windows GPU","Mac (Wireshark)","Tailscale","Google Site"],file:"pi_continuous_load.py"},
+  "5.1":{t:"5.1 Embeddings + vector DB",f:"Stand up the embedding model + vector DB on the server.",n:["win"],e:[],c:["Windows GPU","Vector DB"],file:"nomic-embed-text"},
+  "5.2":{t:"5.2 Index NextCloud corpus",f:"Pi 4 home cloud serves files; Windows GPU embeds them.",n:["ncpi","win","router"],e:["ncpi-router","win-router"],c:["Raspberry Pi 4 (NextCloud + SSD)","Windows GPU","Vector DB"],file:"ingestion pipeline"},
+  "5.3":{t:"5.3 Chat with home cloud",f:"Retrieve from the index, generate with Qwen; ask from the Mac.",n:["ncpi","win","router","mac"],e:["ncpi-router","win-router","mac-router"],c:["NextCloud Pi","Windows GPU","Mac"],file:"LangChain / Context Chat"},
+  "5.4":{t:"5.4 Knowledge graph + GraphRAG",f:"Neo4j graph + hybrid retrieval over your corpus.",n:["ncpi","win","router"],e:["ncpi-router","win-router"],c:["NextCloud Pi","Windows GPU","Neo4j"],file:"Neo4j / GraphRAG"},
+  "5.5":{t:"5.5 RAG evaluation",f:"Score vector vs GraphRAG configs on your data.",n:["ncpi","win","router"],e:["ncpi-router","win-router"],c:["NextCloud Pi","Windows GPU"],file:"eval set"},
+  "5.6":{t:"5.6 VLM + audio/video",f:"Vision model (unload Qwen) + transcription. Uses pictures from the home cloud.",n:["win","ncpi","router","mac"],e:["win-router","ncpi-router","mac-router"],c:["Windows GPU","NextCloud Pi (pictures)","Mac"],file:"llama3.2-vision"},
+  "6.1":{t:"6.1 First MCP tool agent",f:"Local LLM calls an MCP tool.",n:["win","mac","router"],e:["win-router","mac-router"],c:["Windows GPU","MCP server"],file:"MCP server"},
+  "6.2":{t:"6.2 LangChain → LangGraph",f:"Build a stateful agent graph (n8n no-code).",n:["win","mac","router"],e:["win-router","mac-router"],c:["Windows GPU","n8n / LangGraph"],file:"n8n"},
+  "6.3":{t:"6.3 Self-correcting Coder/Tester",f:"Coder→Tester→Router loop fixes its own errors.",n:["win","mac","router"],e:["win-router","mac-router"],c:["Windows GPU","n8n / LangGraph"],file:"6_3_coder_tester_loop.json"},
+  "6.4":{t:"6.4 Multi-agent & A2A",f:"Coder + Security Auditor agents collaborate.",n:["win","ncpi","router","mac"],e:["win-router","ncpi-router","mac-router"],c:["Windows GPU","NextCloud Pi","n8n"],file:"n8n / LangGraph"},
+  "7.1":{t:"7.1 Google Site dashboard",f:"Push measured KPIs (incl. live Pi stream) to the dashboard.",n:["win","mac","pi2","router","dash"],e:["win-router","mac-router","pi2-router","dash-router"],c:["Mac","Windows GPU","Pi 4","Google Site"],file:"results.csv / webhook"},
+  "7.2":{t:"7.2 Expert write-ups",f:"Publish one post per phase with your data.",n:["mac","dash"],e:["dash-router","mac-router"],c:["Mac","Google Site"],file:"blog posts"},
+};
+const PHASES=[["Start here",["0"]],["Phase 0",["0.1","0.2","0.3"]],["Phase 1",["1.1","1.2","1.3","1.4","1.5","1.6"]],
+  ["Phase 2",["2.1","2.2","2.3"]],["Phase 3",["3.1","3.2","3.3"]],["Phase 4",["4.1","4.2","4.3","4.4"]],
+  ["Phase 5",["5.1","5.2","5.3","5.4","5.5","5.6"]],["Phase 6",["6.1","6.2","6.3","6.4"]],["Phase 7",["7.1","7.2"]]];
+
+const allNodes=[...document.querySelectorAll('.node')];
+const allEdges=[...document.querySelectorAll('.edge')];
+const ctr=document.getElementById('controls');
+
+PHASES.forEach(([ph,ids])=>{
+  const lbl=document.createElement('div');lbl.className='phase-label';lbl.textContent=ph;ctr.appendChild(lbl);
+  ids.forEach(id=>{
+    const b=document.createElement('button');b.textContent=id;b.dataset.id=id;
+    b.onclick=()=>select(id);ctr.appendChild(b);
+  });
+});
+
+function select(id){
+  const lab=LABS[id];
+  document.querySelectorAll('#controls button').forEach(b=>b.classList.toggle('active',b.dataset.id===id));
+  allNodes.forEach(n=>n.classList.toggle('dim',!lab.n.includes(n.dataset.node)));
+  allEdges.forEach(e=>{
+    const on=lab.e.includes(e.dataset.edge);
+    e.classList.toggle('on',on);e.classList.toggle('dim',!on);
+  });
+  document.getElementById('t-title').textContent=lab.t;
+  document.getElementById('t-focus').textContent=lab.f;
+  document.getElementById('t-chips').innerHTML=lab.c.map(c=>`<span class="chip">${c}</span>`).join('');
+  document.getElementById('t-file').textContent=lab.file;
+}
+select('0');
+</script>
+</body>
+</html>
