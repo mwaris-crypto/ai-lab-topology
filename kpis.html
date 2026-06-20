@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LLM Inference KPIs — TTFT, TPOT, TPS, Latency, Jitter (Field Guide)</title>
+<style>
+:root{--ink:#0f1623;--muted:#5a6b85;--line:#e2e8f2;--bg:#fff;--blue:#2b7fff;--green:#2faa2f;
+--amber:#e0a800;--red:#e23e6b;--violet:#7a66ff;--card:#f7f9fc;}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.6;font-size:15px}
+.wrap{max-width:1060px;margin:0 auto;padding:28px 22px 70px}
+h1{font-size:27px;margin:0 0 4px}
+h2{font-size:21px;margin:34px 0 8px;padding-top:12px;border-top:2px solid var(--line)}
+h3{font-size:16.5px;margin:16px 0 4px}
+p{margin:8px 0;color:#243049}
+.sub{color:var(--muted);font-size:14px;margin-top:0}
+.lead{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:14px 0}
+table{border-collapse:collapse;width:100%;margin:10px 0 4px;font-size:13.5px}
+th,td{border:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top}
+th{background:#eef3fb;font-weight:700}
+code{background:#eef1f6;padding:1px 5px;border-radius:5px;font-size:13px}
+.pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;color:#fff;white-space:nowrap}
+.p-ttft{background:var(--blue)}.p-tpot{background:var(--green)}.p-tps{background:var(--amber)}
+.p-lat{background:var(--red)}.p-jit{background:var(--violet)}
+.card{border:1px solid var(--line);border-left:5px solid var(--blue);border-radius:10px;padding:12px 16px;margin:14px 0;background:#fcfdff}
+.card.tpot{border-left-color:var(--green)}.card.tps{border-left-color:var(--amber)}
+.card.lat{border-left-color:var(--red)}.card.jit{border-left-color:var(--violet)}
+.card h3{margin-top:2px}
+.kv{font-size:13.5px;margin:6px 0}
+.kv b{display:inline-block;min-width:120px;color:var(--muted)}
+.key{background:#fffceb;border:1px solid #f0e2a8;border-radius:10px;padding:12px 14px;margin:16px 0}
+.net{background:#eef6ff;border:1px solid #cfe2ff;border-radius:8px;padding:8px 12px;margin:8px 0;font-size:13.5px}
+.foot{color:var(--muted);font-size:12.5px;margin-top:30px;border-top:1px solid var(--line);padding-top:10px}
+.tl{width:100%;height:auto;border:1px solid var(--line);border-radius:10px;background:#fff;margin:10px 0}
+ol.rank{counter-reset:r;list-style:none;padding-left:0}
+ol.rank li{margin:8px 0;padding-left:38px;position:relative}
+ol.rank li::before{counter-increment:r;content:counter(r);position:absolute;left:0;top:0;width:26px;height:26px;border-radius:50%;background:var(--ink);color:#fff;text-align:center;line-height:26px;font-weight:700;font-size:13px}
+</style></head><body><div class="wrap">
+
+<h1>LLM Inference KPIs, Explained</h1>
+<p class="sub">TTFT · TPOT · TPS · Total latency · Jitter — what each one means, how it's calculated, why it matters, and the network metric it mirrors.</p>
+
+<div class="lead">
+<b>One mental model.</b> Serving an LLM answer is like delivering data over a network. <b>TTFT</b> is how long before the first byte arrives. <b>TPOT / TPS</b> is the bandwidth — how fast the rest streams. <b>Total latency</b> is the end-to-end transfer time. <b>Jitter</b> is how steady the stream is. Get those four right and you have a fast, smooth service.
+</div>
+
+<h2>The request timeline (where each metric lives)</h2>
+<svg class="tl" viewBox="0 0 1020 250" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica,Arial,sans-serif">
+  <line x1="40" y1="150" x2="980" y2="150" stroke="#9fb0c8" stroke-width="2"/>
+  <!-- request sent -->
+  <line x1="60" y1="120" x2="60" y2="180" stroke="#243049" stroke-width="2"/>
+  <text x="60" y="205" text-anchor="middle" font-size="12" fill="#243049">request</text>
+  <text x="60" y="221" text-anchor="middle" font-size="12" fill="#243049">sent</text>
+  <!-- first token -->
+  <line x1="330" y1="120" x2="330" y2="180" stroke="#2b7fff" stroke-width="2.5"/>
+  <text x="330" y="205" text-anchor="middle" font-size="12" fill="#1a64d6">1st token</text>
+  <!-- TTFT bracket -->
+  <path d="M60,108 L60,98 L330,98 L330,108" fill="none" stroke="#2b7fff" stroke-width="2"/>
+  <text x="195" y="90" text-anchor="middle" font-size="13" font-weight="700" fill="#1a64d6">TTFT  (prefill + queue + 1st token)</text>
+  <!-- decode tokens -->
+  <g stroke="#2faa2f" stroke-width="2.5">
+    <line x1="330" y1="135" x2="330" y2="165"/>
+    <line x1="400" y1="135" x2="400" y2="165"/>
+    <line x1="470" y1="135" x2="470" y2="165"/>
+    <line x1="560" y1="135" x2="560" y2="165"/>
+    <line x1="630" y1="135" x2="630" y2="165"/>
+    <line x1="700" y1="135" x2="700" y2="165"/>
+    <line x1="770" y1="135" x2="770" y2="165"/>
+    <line x1="900" y1="135" x2="900" y2="165"/>
+  </g>
+  <!-- ITL gap label -->
+  <path d="M400,172 L400,182 L470,182 L470,172" fill="none" stroke="#2faa2f" stroke-width="1.5"/>
+  <text x="435" y="198" text-anchor="middle" font-size="11" fill="#1f7a1f">ITL</text>
+  <!-- a bigger gap = jitter -->
+  <path d="M770,172 L770,182 L900,182 L900,172" fill="none" stroke="#7a66ff" stroke-width="1.5"/>
+  <text x="835" y="198" text-anchor="middle" font-size="11" fill="#5a45e0">long gap = jitter</text>
+  <text x="600" y="128" text-anchor="middle" font-size="13" font-weight="700" fill="#1f7a1f">decode: tokens 2…N  (TPOT = avg gap · TPS = tokens/sec)</text>
+  <!-- last token -->
+  <line x1="900" y1="120" x2="900" y2="180" stroke="#243049" stroke-width="2"/>
+  <text x="900" y="205" text-anchor="middle" font-size="12" fill="#243049">last token</text>
+  <!-- latency bracket -->
+  <path d="M60,235 L60,225 L900,225 L900,235" fill="none" stroke="#e23e6b" stroke-width="2"/>
+  <text x="480" y="247" text-anchor="middle" font-size="13" font-weight="700" fill="#c52a55">Total request latency  (end to end)</text>
+  <text x="40" y="40" font-size="14" font-weight="700" fill="#0f1623">Time →</text>
+</svg>
+
+<h2>Cheat sheet (all five at a glance)</h2>
+<table>
+<tr><th>Metric</th><th>Plain meaning</th><th>Formula</th><th>Unit</th><th>Network twin</th></tr>
+<tr><td><span class="pill p-ttft">TTFT</span></td><td>Wait until the answer <i>starts</i></td><td><code>t(first token) − t(sent)</code></td><td>ms</td><td>Time-to-first-byte (TTFB)</td></tr>
+<tr><td><span class="pill p-tpot">TPOT</span></td><td>Average time per output token (streaming pace)</td><td><code>decode_time ÷ (N−1)</code> = mean(ITL)</td><td>ms/token</td><td>Per-packet serialization delay</td></tr>
+<tr><td><span class="pill p-tps">TPS</span></td><td>Throughput — tokens produced per second</td><td><code>output_tokens ÷ decode_time</code> ≈ 1000 ÷ TPOT</td><td>tokens/s</td><td>Bandwidth / throughput (bps)</td></tr>
+<tr><td><span class="pill p-lat">Latency</span></td><td>Wait until the answer is <i>complete</i></td><td><code>t(last token) − t(sent)</code> = TTFT + decode</td><td>s</td><td>End-to-end transfer time</td></tr>
+<tr><td><span class="pill p-jit">Jitter</span></td><td>How <i>uneven</i> the token stream is</td><td><code>stdev(ITL)</code> or <code>p95(ITL) − p50(ITL)</code></td><td>ms</td><td>Packet delay variation (VoIP jitter)</td></tr>
+</table>
+<p class="sub">N = number of output tokens. <code>decode_time = latency − TTFT</code>. ITL = inter-token latency = the gap between two consecutive output tokens. TPOT is simply the <b>average</b> of ITL; jitter is its <b>spread</b>.</p>
+
+<h2>Each metric in detail</h2>
+
+<div class="card">
+<h3><span class="pill p-ttft">TTFT</span> &nbsp;Time To First Token</h3>
+<p class="kv"><b>What it is:</b> the delay from sending the request to receiving the very first token of the reply.</p>
+<p class="kv"><b>What it shows:</b> responsiveness — how quickly the system "starts talking." It's dominated by <b>prefill</b> (reading the whole prompt) plus any <b>queue wait</b> if the server is busy.</p>
+<p class="kv"><b>Why it matters:</b> it's the lag the user actually feels before anything appears. In chat and agents it's the #1 driver of "feels fast." Long prompts and a loaded server both push it up.</p>
+<p class="kv"><b>How to calculate:</b> <code>TTFT = t(first token) − t(request sent)</code>. Includes network + queue + tokenize + prefill + generating that first token.</p>
+<div class="net"><b>Network twin — Time To First Byte (TTFB):</b> just like a web server's "time to first byte," TTFT is how long before the first piece of the response shows up. A page that's blank for 2 seconds feels broken — same with a chatbot.</div>
+</div>
+
+<div class="card tpot">
+<h3><span class="pill p-tpot">TPOT</span> &nbsp;Time Per Output Token  (a.k.a. average ITL)</h3>
+<p class="kv"><b>What it is:</b> the average time to produce each token <i>after</i> the first, during decode.</p>
+<p class="kv"><b>What it shows:</b> the steady streaming speed — how fast words appear once the reply starts.</p>
+<p class="kv"><b>Why it matters:</b> it sets how long a long answer takes. As a rule of thumb, humans read ~5–8 tokens/second, so a TPOT under ~150 ms/token (≈ 7+ tokens/s) feels real-time; slower than that and the user waits on the text.</p>
+<p class="kv"><b>How to calculate:</b> <code>TPOT = decode_time ÷ (N−1)</code>, where <code>decode_time = latency − TTFT</code>. It is the mean of all inter-token gaps.</p>
+<div class="net"><b>Network twin — per-packet serialization delay:</b> the steady time to push each packet onto the wire. TPOT is the steady time to emit each token.</div>
+</div>
+
+<div class="card tps">
+<h3><span class="pill p-tps">TPS</span> &nbsp;Tokens Per Second  (throughput)</h3>
+<p class="kv"><b>What it is:</b> how many tokens are generated per second. Two flavors: <b>per-request TPS</b> (one user's speed) and <b>aggregate TPS</b> (everything the server emits across all concurrent requests).</p>
+<p class="kv"><b>What it shows:</b> per-request TPS = how fast one user is served; aggregate TPS = the server's total capacity.</p>
+<p class="kv"><b>Why it matters:</b> aggregate TPS is the operator's capacity-and-cost number — "how many users/tokens can one GPU serve." Continuous batching raises aggregate TPS by sharing each weight read across several requests.</p>
+<p class="kv"><b>How to calculate:</b> <code>TPS = output_tokens ÷ decode_time</code>. Per request it's ≈ <code>1000 ÷ TPOT(ms)</code> (TPS and TPOT are inverses).</p>
+<div class="net"><b>Network twin — bandwidth / throughput:</b> bits-per-second on a link. Per-request TPS ≈ one flow's goodput; aggregate TPS ≈ total link throughput.</div>
+</div>
+
+<div class="card lat">
+<h3><span class="pill p-lat">Latency</span> &nbsp;Total (end-to-end) request latency</h3>
+<p class="kv"><b>What it is:</b> the full time from sending the request to receiving the last token of the complete answer.</p>
+<p class="kv"><b>What it shows:</b> total wait for the whole response.</p>
+<p class="kv"><b>Why it matters:</b> it's the SLA for full completion. It dominates when the consumer needs the <i>entire</i> output before acting — non-streaming UIs, batch jobs, and multi-step agents where each step's latency compounds.</p>
+<p class="kv"><b>How to calculate:</b> <code>Latency = t(last token) − t(sent) = TTFT + decode_time = TTFT + (N−1) × TPOT</code>. Measured client-side, so it includes network hops and queue wait — what the user really experiences.</p>
+<div class="net"><b>Network twin — end-to-end transfer time:</b> total time to fetch a file = connection setup + transferring all the bytes. Latency = TTFT + streaming all the tokens.</div>
+</div>
+
+<div class="card jit">
+<h3><span class="pill p-jit">Jitter</span> &nbsp;Inter-token latency variation</h3>
+<p class="kv"><b>What it is:</b> the variability of ITL — how much the gap between tokens bounces around.</p>
+<p class="kv"><b>What it shows:</b> smoothness. A low average TPOT can still feel choppy if some tokens stall; jitter exposes that.</p>
+<p class="kv"><b>Why it matters:</b> consistency is a carrier-class requirement. Under load and batching, the scheduler interleaves requests and individual tokens get delayed, so production SLOs are written on the <b>p95 (or p99) ITL</b>, not the average.</p>
+<p class="kv"><b>How to calculate:</b> <code>jitter = stdev(ITL)</code>, or the tail form <code>p95(ITL) − p50(ITL)</code>. Needs ≥3 tokens to be meaningful.</p>
+<div class="net"><b>Network twin — packet delay variation (the classic "jitter"):</b> in VoIP/video, uneven packet arrival makes calls choppy even when average latency is fine. Token jitter makes a stream stutter the same way.</div>
+</div>
+
+<h2>A worked example (numbers that tie together)</h2>
+<p>One request: the first token arrives at <b>0.30 s</b>; the model then generates <b>200 tokens</b>, finishing at <b>4.30 s</b>.</p>
+<table>
+<tr><th>Step</th><th>Calculation</th><th>Result</th></tr>
+<tr><td>TTFT</td><td><code>0.30 s − 0.00 s</code></td><td><b>300 ms</b></td></tr>
+<tr><td>decode_time</td><td><code>4.30 s − 0.30 s</code></td><td><b>4.00 s</b></td></tr>
+<tr><td>TPOT</td><td><code>4000 ms ÷ (200 − 1)</code></td><td><b>≈ 20.1 ms/token</b></td></tr>
+<tr><td>TPS (per request)</td><td><code>200 ÷ 4.00 s</code> (≈ 1000 ÷ 20.1)</td><td><b>≈ 50 tokens/s</b></td></tr>
+<tr><td>Total latency</td><td><code>300 ms + (199 × 20.1 ms)</code></td><td><b>≈ 4.30 s</b></td></tr>
+<tr><td>Jitter (if most gaps ≈ 20 ms but a few hit 60 ms)</td><td><code>stdev(ITL)</code></td><td><b>e.g. ≈ 10 ms</b> (p95 ITL ≈ 45 ms)</td></tr>
+</table>
+<p class="net" style="background:#f4f1ff;border-color:#ddd3ff"><b>As a network story:</b> first byte in 300 ms (TTFB), then content streams at ~50 tokens/s (bandwidth), whole transfer done in 4.3 s (end-to-end), and the stream is fairly smooth (low jitter). Speed it up by lowering TTFT (shorter prompt / less queue) or raising TPS (faster GPU / batching); smooth it out by lowering p95 ITL.</p>
+
+<h2>Ranking by how critical they are</h2>
+<p>Criticality depends on the workload, but for an <b>interactive, user-facing service</b> (chat, agents — the carrier-class case), the usual order is:</p>
+<ol class="rank">
+<li><b>TTFT</b> — the first impression. Nothing feels fast if the reply is slow to start.</li>
+<li><b>TPOT / per-request TPS</b> — the streaming speed; must keep up with reading and not drag on long answers.</li>
+<li><b>Jitter (p95 ITL)</b> — consistency; protects the experience under load, where SLOs live.</li>
+<li><b>Total latency</b> — the full-completion SLA; becomes #1 for non-streaming and multi-step agent flows.</li>
+<li><b>Aggregate TPS</b> — the operator's capacity/cost metric; critical for the business, less so for any single user.</li>
+</ol>
+<p>How the ranking shifts by workload:</p>
+<table>
+<tr><th>Workload</th><th>Most critical &rarr; least</th></tr>
+<tr><td>Interactive chat / agent (user waiting)</td><td>TTFT &gt; TPOT &gt; jitter (p95 ITL) &gt; latency &gt; aggregate TPS</td></tr>
+<tr><td>Multi-step agents / long-form (latency compounds)</td><td>Total latency &amp; TTFT &gt; TPOT &gt; jitter &gt; aggregate TPS</td></tr>
+<tr><td>Batch / offline generation (no human waiting)</td><td>Aggregate TPS &gt; total latency &gt; TPOT &gt; TTFT &gt; jitter</td></tr>
+</table>
+
+<h2>How they all relate (one box)</h2>
+<div class="key">
+<code>ITLᵢ = t(token i) − t(token i−1)</code><br>
+<code>TPOT = mean(ITL) = decode_time ÷ (N−1)</code><br>
+<code>TPS  = output_tokens ÷ decode_time ≈ 1000 ÷ TPOT(ms)</code><br>
+<code>Latency = TTFT + decode_time = TTFT + (N−1) × TPOT</code><br>
+<code>Jitter = stdev(ITL)  or  p95(ITL) − p50(ITL)</code>
+</div>
+
+<p class="foot">
+Definitions follow common industry usage (TTFT; TPOT, also called inter-token latency or ITL; throughput in tokens/s; end-to-end latency; jitter as ITL variation). Two honest conventions to know: (1) TPOT is sometimes computed as <code>decode_time ÷ N</code> instead of <code>÷ (N−1)</code> — the difference is one token and is negligible for long outputs, but <code>÷ (N−1)</code> is the precise "time per token after the first." (2) TPS is reported either per-request or aggregated across concurrent requests; always state which. All values are measured client-side, so latency includes network and queue time on purpose — that is what the end user experiences. Safe to publish: contains no addresses, hostnames, or credentials.
+</p>
+
+</div></body></html>
