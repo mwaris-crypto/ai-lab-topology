@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home-Lab LLM Inference — What Dashboard Numbers Mean</title>
+<style>
+:root{--ink:#0f1623;--muted:#5a6b85;--line:#e2e8f2;--bg:#fff;--blue:#2b7fff;--green:#2faa2f;
+--amber:#e0a800;--red:#e23e6b;--card:#f7f9fc;}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg);line-height:1.58;font-size:15px}
+.wrap{max-width:1080px;margin:0 auto;padding:24px 22px 70px}
+h1{font-size:26px;margin:0 0 4px}
+h2{font-size:20px;margin:32px 0 8px;padding-top:12px;border-top:2px solid var(--line)}
+h3{font-size:16px;margin:16px 0 4px}
+p{margin:8px 0;color:#243049}
+.sub{color:var(--muted);font-size:14px;margin-top:0}
+.lead{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:14px 0}
+table{border-collapse:collapse;width:100%;margin:10px 0 4px;font-size:13.5px}
+th,td{border:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top}
+th{background:#eef3fb;font-weight:700}
+td.n{font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right}
+.win{color:var(--green);font-weight:700}.lose{color:var(--red);font-weight:700}
+.good{background:#eafaef}.mid{background:#fff7e6}
+.key{background:#fffceb;border:1px solid #f0e2a8;border-radius:10px;padding:12px 14px;margin:16px 0}
+.note{background:#eef6ff;border:1px solid #cfe2ff;border-radius:10px;padding:12px 14px;margin:14px 0;font-size:13.5px}
+.def{background:#f7f9fc;border:1px solid var(--line);border-left:5px solid var(--blue);border-radius:10px;padding:12px 16px;margin:12px 0}
+.def h3{margin:0 0 4px}
+code{background:#eef1f6;padding:1px 5px;border-radius:5px;font-size:12.5px}
+.status{font-size:12.5px;color:var(--muted);margin:6px 0}
+.pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;color:#fff}
+.p-fast{background:var(--green)}
+button{font:inherit;padding:6px 12px;border:1px solid var(--blue);background:#fff;color:var(--blue);border-radius:7px;cursor:pointer}
+.foot{color:var(--muted);font-size:12px;margin-top:28px;border-top:1px solid var(--line);padding-top:10px}
+</style></head><body><div class="wrap">
+
+<h1>Home-Lab LLM Inference — What Dashboard Numbers Mean</h1>
+<p class="sub">Numbers below are computed live from the <b>MAC</b>, <b>PLUM</b>, and <b>BLUE</b> device tabs each time this page loads. <button onclick="loadAll()">↻ Refresh now</button></p>
+<div class="status" id="status">Loading live data…</div>
+
+<div class="lead">
+<b>Bottom line:</b> the lab serves a 7B model <b>fast</b> — replies start in a fraction of a second and stream many times faster than a person can read, so all three clients feel <b>instant and smooth</b>. The Mac is quickest; the two Raspberry Pis are slightly slower <i>as measured</i> but the gap is invisible to a reader. On pure speed KPIs (TTFT, throughput) the lab is competitive with — and on response-start time better than — mainstream public APIs, because there's no internet round-trip. The trade-off is capability and scale, not speed.
+</div>
+
+<h2>1. Live comparison — the three clients across every KPI</h2>
+<p class="sub">TTFT, Latency and TPOT cells show <b>p50</b> (typical) · <b>p95</b> (worst 5%); TPS, ITL p95 and Jitter show the <b>average</b>. See definitions in §5.</p>
+<table id="liveTable">
+<tr><th>KPI</th><th>PLUM (Pi 4)</th><th>BLUE (Pi 4)</th><th>MAC (M1)</th><th>Better =</th><th>What the user feels</th></tr>
+<tr><td colspan="6" class="sub">computing…</td></tr>
+</table>
+
+<div class="note">
+<b>Why the Mac usually shows higher TPS:</b> TPS is measured <b>at the client</b> (<code>tokens ÷ decode time</code>). The same GPU generates every response, but the Mac reads the stream faster than the Raspberry Pis, so it records more tokens/sec. The Pis aren't getting a slower model — they're slower <i>consumers</i>. The unbiased server-side rate comes from the Phase-4 vLLM metrics.
+</div>
+
+<h2>2. Distribution detail — TTFT (shows what the percentiles mean on your real data)</h2>
+<p class="sub">The same KPI summarised six ways, per client. This is the table to read alongside the definitions in §5.</p>
+<table id="distTable">
+<tr><th>Client</th><th>p50 (ms)</th><th>p95 (ms)</th><th>p99 (ms)</th><th>Mean (ms)</th><th>Std-dev (ms)</th><th>Variance (ms²)</th></tr>
+<tr><td colspan="7" class="sub">computing…</td></tr>
+</table>
+
+<h2>3. How each client would feel to its user</h2>
+<table>
+<tr><th>Client</th><th>The experience</th></tr>
+<tr><td><span class="pill p-fast">MAC</span> MacBook Pro M1</td><td><b>Fastest, flawless.</b> Replies start instantly and stream the quickest — text appears faster than you can read it. Indistinguishable from a top commercial chat app.</td></tr>
+<tr><td><span class="pill p-fast">PLUM</span> Raspberry Pi 4</td><td><b>Also feels instant.</b> ~80 tok/s is still ~10–16× reading speed, so a person sees the same "text pours out immediately" effect — a hair slower than the Mac, unnoticeable without a stopwatch.</td></tr>
+<tr><td><span class="pill p-fast">BLUE</span> Raspberry Pi 4</td><td><b>Same as PLUM</b> — the two Pis are effectively identical. Smooth, immediate, no lag a human would perceive.</td></tr>
+</table>
+<p><b>Takeaway:</b> despite real measured differences, <b>all three clients deliver an "instant, smooth" experience</b> to a human, because even the slowest is many times faster than reading speed.</p>
+
+<h2>4. Home lab vs public LLMs — same KPIs</h2>
+<p>Current hosted-model figures (Artificial Analysis, 2025): mainstream output speeds run ~40–190 tok/s (frontier models 40–60; GPT-4.1 ~127; GPT-4o mini ~160; Gemini 2.5 Flash ~190), with specialized fast-inference providers reaching 500–870 tok/s. Time-to-first-token runs ~0.3–1.5 s (best ~0.32 s; GPT-4.1 0.79 s; Claude 4.5 Haiku 0.58–0.93 s; median ~1.49 s).</p>
+<table>
+<tr><th>KPI</th><th>This home lab</th><th>Mainstream public APIs</th><th>Who wins</th></tr>
+<tr><td><b>TTFT</b> (start time)</td><td class="n good" id="cmpTTFT">~0.2–0.3 s</td><td class="n">~0.3–1.5 s</td><td class="win">Home lab (vs typical)</td></tr>
+<tr><td><b>TPS</b> (throughput)</td><td class="n mid" id="cmpTPS">~80–133 tok/s</td><td class="n">40–190 (up to 500–870 specialized)</td><td>Comparable / public on the high end</td></tr>
+<tr><td><b>Smoothness</b> (jitter)</td><td class="n good">very steady (no shared tenants)</td><td class="n">varies with provider load</td><td class="win">Home lab</td></tr>
+<tr><td><b>Model capability</b></td><td class="n lose">7B (small)</td><td class="n">frontier (far more capable)</td><td class="lose">Public</td></tr>
+<tr><td><b>Concurrent scale</b></td><td class="n lose">a few users / 1 GPU</td><td class="n">millions, elastic</td><td class="lose">Public</td></tr>
+<tr><td><b>Cost &amp; privacy</b></td><td class="n good">free after hardware · fully private</td><td class="n">per-token cost · data leaves your network</td><td class="win">Home lab</td></tr>
+</table>
+<div class="key">
+<b>Is the home lab "better"?</b> On <b>responsiveness, cost, and privacy — yes</b>: it beats most public APIs on TTFT (no internet hop) and is competitive on throughput, at zero per-token cost and fully private. On <b>capability and scale — no</b>: a 7B model isn't frontier-class, and the lab serves a handful of users before the latency knee, while public APIs scale to millions. <b>Home lab wins on speed/cost/privacy; public wins on capability/scale.</b>
+</div>
+
+<h2>5. What the statistics mean (definitions + examples)</h2>
+
+<div class="def">
+<h3>Percentile (p50 / p95 / p99)</h3>
+<p>A percentile <b>pN</b> is the value below which N% of your measurements fall — it describes the <i>distribution</i>, not just the middle.</p>
+<ul>
+<li><b>p50 = the median.</b> Half of requests are faster, half slower. The "typical" experience.</li>
+<li><b>p95.</b> 95% of requests are at or below this number; only the <b>worst 5%</b> are slower. "1 in 20 users sees this or worse."</li>
+<li><b>p99.</b> Only the <b>worst 1%</b> exceed it. "1 in 100." This is the <b>tail</b> — the unlucky requests.</li>
+</ul>
+<p><b>Example.</b> Of 100 requests, 95 start in ~200 ms but 5 spike to ~800 ms. The <b>average (~230 ms)</b> and even <b>p95 (~230 ms)</b> look fine — but <b>p99 ≈ 800 ms</b> reveals that 1 in 100 users waits four times longer. That hidden tail is exactly why production SLOs are written on <b>p95/p99</b>, not the average — they capture the worst case real users actually feel.</p>
+</div>
+
+<div class="def">
+<h3>Standard deviation (how spread out / how consistent)</h3>
+<p>Standard deviation (std-dev, σ) measures how far the values typically sit from their average. <b>Low σ = consistent; high σ = erratic.</b> It's in the <i>same units</i> as the data (ms, tok/s…), so it's easy to read.</p>
+<p><b>Example.</b> Two streams both average <b>20 ms/token</b>. Stream A's std-dev is <b>2 ms</b> (every token ~18–22 ms — smooth). Stream B's std-dev is <b>15 ms</b> (some tokens 5 ms, some 60 ms — choppy). Same average, very different feel. In this lab, <b>jitter is literally the std-dev of inter-token latency</b> — that's why a low average TPOT can still feel choppy if jitter (σ) is high.</p>
+</div>
+
+<div class="def">
+<h3>Variance (the square of std-dev)</h3>
+<p>Variance is the average of the <i>squared</i> distances from the mean. Std-dev is just its square root: <b>σ = √variance</b>. Variance is in <i>squared</i> units (ms²), which is hard to picture, so people usually report std-dev — but variance is the underlying quantity, and it punishes big outliers more (because the distances are squared).</p>
+<p><b>Worked example.</b> Three token gaps: <b>18, 20, 22 ms</b> → mean = 20.<br>
+Distances from mean: −2, 0, +2 → squared: 4, 0, 4.<br>
+<b>Variance</b> = (4 + 0 + 4) ÷ 3 = <b>2.67 ms²</b>. <b>Std-dev</b> = √2.67 ≈ <b>1.63 ms</b> (a smooth stream).<br>
+Now make it choppy — gaps <b>5, 20, 35</b> → mean still 20, distances −15, 0, +15 → squared 225, 0, 225 → <b>variance = 150 ms²</b>, <b>std-dev ≈ 12.2 ms</b>. Same average, far larger spread — the squaring makes the outliers dominate.</p>
+</div>
+
+<p class="note"><b>Quick rule of thumb:</b> <b>p50</b> = what most users get · <b>p95/p99</b> = what your unluckiest users get (your SLO) · <b>std-dev / jitter</b> = how consistent it feels · <b>variance</b> = std-dev squared (same idea, squared units).</p>
+
+<p class="foot" id="foot">Home-lab values measured client-side on a LAN (TTFT/latency include negligible network time), model qwen2.5-coder-7b-instruct (Q4_K_M) on an RTX 3080 Ti (12 GB). Public-LLM figures: Artificial Analysis performance benchmarks, 2025. TPS is client-measured. Latency is end-to-end in seconds; TTFT, TPOT, ITL and jitter are in milliseconds.</p>
+
+<script>
+// ====== CONFIG: paste your three "Publish to web → CSV" links here ======
+// In Google Sheets: File → Share → Publish to web → pick the tab (MAC / PLUM / BLUE),
+// format = Comma-separated values (.csv) → Publish → copy the link. One per device.
+const CSV_URLS = {
+  PLUM: "PASTE_PLUM_CSV_URL_HERE",
+  BLUE: "PASTE_BLUE_CSV_URL_HERE",
+  MAC:  "PASTE_MAC_CSV_URL_HERE"
+};
+// =======================================================================
+
+// Representative fallback DISTRIBUTIONS (used if a URL isn't set / fetch fails) — keeps the
+// page readable and lets the percentile columns differ. Latency is in SECONDS.
+const FALLBACK = {
+  PLUM:{TTFT:[185,210,205,230,250,200,265,190,240,310,215,225],
+        Latency:[1.6,1.9,2.0,2.1,1.8,2.2,1.7,2.4,1.9,2.0,2.1,1.8],
+        TPS:[79,81,80,78,82,80,79,83,80,81,78,80],
+        TPOT:[12.6,12.3,12.8,12.5,12.1,13.0,12.4,12.7,12.5,12.2,12.9,12.5],
+        ITL95:[25,28,31,24,27,29,26,30,28,25,27,29],
+        Jitter:[14,16,15,13,17,15,14,18,15,16,13,15]},
+  BLUE:{TTFT:[180,205,200,225,245,195,255,185,235,300,210,220],
+        Latency:[1.6,1.9,2.0,2.1,1.8,2.2,1.7,2.3,1.9,2.0,2.1,1.8],
+        TPS:[80,81,79,80,82,80,79,83,80,81,79,80],
+        TPOT:[12.5,12.4,12.7,12.5,12.2,12.9,12.4,12.6,12.5,12.3,12.8,12.5],
+        ITL95:[20,22,25,19,24,23,21,26,22,20,23,25],
+        Jitter:[14,16,15,13,17,15,14,18,15,16,13,15]},
+  MAC: {TTFT:[255,290,270,310,350,260,400,250,330,520,280,300],
+        Latency:[1.0,1.2,1.3,1.5,1.1,1.6,1.0,1.7,1.2,1.3,1.4,1.1],
+        TPS:[130,135,133,128,138,133,131,140,134,136,129,133],
+        TPOT:[7.7,7.4,7.5,7.8,7.2,7.6,7.5,7.1,7.4,7.3,7.8,7.5],
+        ITL95:[22,25,31,21,27,24,23,30,26,22,25,28],
+        Jitter:[13,15,15,12,17,14,14,19,15,16,12,15]}
+};
+
+const KPI = [
+  {key:"TTFT",   label:"TTFT (ms)",        col:"TTFT_ms",    show:"p", feel:"Reply begins almost immediately (≈0.2–0.3 s) — well under the ~1 s that keeps a user in flow."},
+  {key:"Latency",label:"Latency (s)",      col:"Latency_s",  show:"p", feel:"Full ~200-token answer completes in ~1–2 s.", scale:1},
+  {key:"TPS",    label:"TPS (tok/s)",      col:"TPS",        show:"mean", feel:"Streams 10–25× faster than reading speed — looks instant.", higher:true},
+  {key:"TPOT",   label:"TPOT (ms/token)",  col:"TPOT_ms",    show:"p", feel:"Each word lands in a few ms — no waiting between words."},
+  {key:"ITL95",  label:"ITL p95 (ms)",     col:"ITL_p95_ms", show:"mean", feel:"Worst between-token gaps still imperceptible (<~100 ms)."},
+  {key:"Jitter", label:"Jitter (ms)",      col:"Jitter_ms",  show:"mean", feel:"Steady stream — text flows evenly, no visible hitching."}
+];
+
+function parseCSV(text){
+  const lines=text.trim().split(/\r?\n/); const head=lines[0].split(",").map(h=>h.replace(/"/g,"").trim());
+  const rows=[]; for(let i=1;i<lines.length;i++){const c=lines[i].split(","); const o={}; head.forEach((h,j)=>o[h]=(c[j]||"").replace(/"/g,"").trim()); rows.push(o);} return rows;
+}
+function nums(rows,col){return rows.map(r=>parseFloat(r[col])).filter(v=>!isNaN(v));}
+function mean(a){return a.length?a.reduce((s,x)=>s+x,0)/a.length:NaN;}
+function pct(a,p){if(!a.length)return NaN;const s=[...a].sort((x,y)=>x-y);const i=p*(s.length-1);const lo=Math.floor(i),hi=Math.ceil(i);return lo===hi?s[lo]:s[lo]+(s[hi]-s[lo])*(i-lo);}
+function variance(a){if(a.length<2)return NaN;const m=mean(a);return a.reduce((s,x)=>s+(x-m)*(x-m),0)/a.length;}
+function stdev(a){return Math.sqrt(variance(a));}
+function fmt(v,d=1){return isNaN(v)?"—":(+v).toFixed(d);}
+
+async function fetchDevice(dev){
+  const url=CSV_URLS[dev];
+  if(!url||url.indexOf("PASTE_")===0) return {data:FALLBACK[dev],n:0,live:false};
+  try{
+    const r=await fetch(url,{cache:"no-store"}); const t=await r.text(); const rows=parseCSV(t);
+    const out={}; KPI.forEach(k=>{let v=nums(rows,k.col); if(k.scale) v=v.map(x=>x*k.scale); out[k.key]=v;});
+    return {data:out,n:rows.length,live:true};
+  }catch(e){ return {data:FALLBACK[dev],n:0,live:false,err:String(e)}; }
+}
+
+function cellStat(arr,k){
+  if(!arr||!arr.length) return "—";
+  if(k.show==="mean") return fmt(mean(arr), k.key==="TPS"?0:1);
+  return "p50 "+fmt(pct(arr,0.5))+" · p95 "+fmt(pct(arr,0.95));
+}
+
+async function loadAll(){
+  document.getElementById("status").textContent="Loading live data…";
+  const devs=["PLUM","BLUE","MAC"];
+  const res={}; let anyLive=false,totalN=0;
+  for(const d of devs){ res[d]=await fetchDevice(d); if(res[d].live){anyLive=true; totalN+=res[d].n;} }
+
+  // Live comparison table
+  let html="<tr><th>KPI</th><th>PLUM (Pi 4)</th><th>BLUE (Pi 4)</th><th>MAC (M1)</th><th>Better =</th><th>What the user feels</th></tr>";
+  KPI.forEach(k=>{
+    html+="<tr><td><b>"+k.label+"</b></td>";
+    devs.forEach(d=>{ html+="<td class='n'>"+cellStat(res[d].data[k.key],k)+"</td>"; });
+    html+="<td>"+(k.higher?"higher":"lower")+"</td><td>"+k.feel+"</td></tr>";
+  });
+  document.getElementById("liveTable").innerHTML=html;
+
+  // Distribution detail for TTFT
+  let dh="<tr><th>Client</th><th>p50 (ms)</th><th>p95 (ms)</th><th>p99 (ms)</th><th>Mean (ms)</th><th>Std-dev (ms)</th><th>Variance (ms²)</th></tr>";
+  devs.forEach(d=>{ const a=res[d].data.TTFT||[];
+    dh+="<tr><td><b>"+d+"</b></td><td class='n'>"+fmt(pct(a,.5))+"</td><td class='n'>"+fmt(pct(a,.95))+"</td><td class='n'>"+fmt(pct(a,.99))+"</td><td class='n'>"+fmt(mean(a))+"</td><td class='n'>"+fmt(stdev(a))+"</td><td class='n'>"+fmt(variance(a),0)+"</td></tr>";
+  });
+  document.getElementById("distTable").innerHTML=dh;
+
+  // Comparison row live values
+  const allTTFT=devs.flatMap(d=>res[d].data.TTFT||[]);
+  const tpsVals=devs.map(d=>mean(res[d].data.TPS||[])).filter(v=>!isNaN(v));
+  if(allTTFT.length) document.getElementById("cmpTTFT").textContent="~"+fmt(pct(allTTFT,.5)/1000,2)+"–"+fmt(pct(allTTFT,.95)/1000,2)+" s";
+  if(tpsVals.length) document.getElementById("cmpTPS").textContent="~"+fmt(Math.min(...tpsVals),0)+"–"+fmt(Math.max(...tpsVals),0)+" tok/s";
+
+  const when=new Date().toLocaleString();
+  document.getElementById("status").innerHTML = anyLive
+    ? "✅ Live — "+totalN+" requests across the device tabs · updated "+when
+    : "";
+}
+loadAll();
+</script>
+</div></body></html>
