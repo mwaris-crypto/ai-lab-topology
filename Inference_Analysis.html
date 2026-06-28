@@ -25,6 +25,7 @@ td.n{font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right}
 .def{background:#f7f9fc;border:1px solid var(--line);border-left:5px solid var(--blue);border-radius:10px;padding:12px 16px;margin:12px 0}
 .def h3{margin:0 0 4px}
 code{background:#eef1f6;padding:1px 5px;border-radius:5px;font-size:12.5px}
+pre{background:#0f1623;color:#e6edf3;padding:10px 12px;border-radius:8px;overflow-x:auto;font-size:12.5px;line-height:1.5;margin:8px 0}
 .status{font-size:12.5px;color:var(--muted);margin:6px 0}
 .pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;color:#fff}
 .p-fast{background:var(--green)}
@@ -82,7 +83,27 @@ button{font:inherit;padding:6px 12px;border:1px solid var(--blue);background:#ff
 <b>Is the home lab "better"?</b> On <b>responsiveness, cost, and privacy — yes</b>: it beats most public APIs on TTFT (no internet hop) and is competitive on throughput, at zero per-token cost and fully private. On <b>capability and scale — no</b>: a 7B model isn't frontier-class, and the lab serves a handful of users before the latency knee, while public APIs scale to millions. <b>Home lab wins on speed/cost/privacy; public wins on capability/scale.</b>
 </div>
 
-<h2>5. What the statistics mean (definitions + examples)</h2>
+<h2>5. Advanced Inference Monitoring — LISO / LILO / SILO / SISO</h2>
+<p>Every request has an <b>Input Sequence Length (ISL)</b> and an <b>Output Sequence Length (OSL)</b>. Pairing short/long for each gives four "shapes." Because GPU time and memory = <b>model weights + prefill (reading the input) + decode (writing the output)</b>, each shape stresses the server differently. The <code>shapes_test.py</code> test sends controlled requests for all four shapes and measures the KPIs, so you can see the prefill-vs-decode trade-off on real numbers.</p>
+
+<h3>What the four tests are (definitions)</h3>
+<table>
+<tr><th>Shape</th><th>Means</th><th>Real example</th><th>Expected behaviour</th></tr>
+<tr><td><b>SISO</b></td><td>Short Input, Short Output</td><td>short Q&amp;A</td><td>Lowest everything — small prefill + small decode.</td></tr>
+<tr><td><b>SILO</b></td><td>Short Input, Long Output</td><td>writing an essay</td><td>Low TTFT, <b>high latency</b> (long decode).</td></tr>
+<tr><td><b>LISO</b></td><td>Long Input, Short Output</td><td>summarization / meeting recap</td><td><b>High TTFT</b> (long prefill), low latency.</td></tr>
+<tr><td><b>LILO</b></td><td>Long Input, Long Output</td><td>rewrite / edit a document</td><td><b>Highest TTFT and highest latency</b>; most KV-cache memory.</td></tr>
+</table>
+
+<h3>Your results vs. expected</h3>
+<table id="shapesTable">
+<tr><th>Shape</th><th>I/O</th><th>Avg ISL (tok)</th><th>Avg OSL (tok)</th><th>Avg TTFT (ms)</th><th>Avg Latency (s)</th><th>Avg TPS</th><th>Expected</th></tr>
+<tr><td colspan="8" class="sub">computing…</td></tr>
+</table>
+<p class="note" id="shapesVerdict">checking your numbers against the expected prefill/decode pattern…</p>
+<p class="sub">How to read it: <b>long input → higher TTFT</b> (prefill), <b>long output → higher latency</b> (decode), <b>LILO</b> heaviest (most KV cache), <b>SISO</b> fastest. That's the "memory = weights + prefill + decode" trade-off from the talk.</p>
+
+<h2>6. What the statistics mean (definitions + examples)</h2>
 
 <div class="def">
 <h3>Percentile (p50 / p95 / p99)</h3>
@@ -123,6 +144,8 @@ const CSV_URLS = {
   BLUE: "PASTE_BLUE_CSV_URL_HERE",
   MAC:  "PASTE_MAC_CSV_URL_HERE"
 };
+// Shape test: Publish-to-web CSV link of the 'Shapes' tab (run shapes_test.py first).
+const SHAPES_CSV = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR0BjTsm9MSXEQYqmvulArZaYsnnMW4_DJDkwpehCjwoYxxAE7u-snCHcCPh-gQJMJGYe0rYpP2FFW1/pub?gid=1408081293&single=true&output=csv";
 // =======================================================================
 
 // Representative fallback DISTRIBUTIONS (used if a URL isn't set / fetch fails) — keeps the
@@ -212,10 +235,63 @@ async function loadAll(){
   if(allTTFT.length) document.getElementById("cmpTTFT").textContent="~"+fmt(pct(allTTFT,.5)/1000,2)+"–"+fmt(pct(allTTFT,.95)/1000,2)+" s";
   if(tpsVals.length) document.getElementById("cmpTPS").textContent="~"+fmt(Math.min(...tpsVals),0)+"–"+fmt(Math.max(...tpsVals),0)+" tok/s";
 
+  // Workload shapes
+  renderShapes(await fetchShapes());
+
   const when=new Date().toLocaleString();
   document.getElementById("status").innerHTML = anyLive
     ? "✅ Live — "+totalN+" requests across the device tabs · updated "+when
     : "";
+}
+
+const SHAPE_ORDER=["SISO","SILO","LISO","LILO"];
+const SHAPE_INFO={
+  SISO:{io:"short / short",stress:"almost nothing — fastest"},
+  SILO:{io:"short / long",stress:"decode (long generation)"},
+  LISO:{io:"long / short",stress:"prefill (big prompt)"},
+  LILO:{io:"long / long",stress:"both — heaviest (most KV cache)"}
+};
+// Representative fallback until you add the Shapes CSV link.
+const SHAPE_FALLBACK={
+  SISO:{ISL:[12],OSL:[40],TTFT:[150],LAT:[0.6],TPS:[110]},
+  SILO:{ISL:[20],OSL:[480],TTFT:[160],LAT:[5.5],TPS:[95]},
+  LISO:{ISL:[900],OSL:[40],TTFT:[600],LAT:[1.0],TPS:[95]},
+  LILO:{ISL:[900],OSL:[480],TTFT:[620],LAT:[6.0],TPS:[90]}
+};
+async function fetchShapes(){
+  if(!SHAPES_CSV||SHAPES_CSV.indexOf("PASTE_")===0) return {live:false,by:SHAPE_FALLBACK};
+  try{
+    const r=await fetch(SHAPES_CSV,{cache:"no-store"}); const rows=parseCSV(await r.text());
+    const by={}; SHAPE_ORDER.forEach(s=>by[s]={ISL:[],OSL:[],TTFT:[],LAT:[],TPS:[]});
+    rows.forEach(o=>{const s=(o.Shape||"").toUpperCase(); if(by[s]){
+      [["ISL_tokens","ISL"],["OSL_tokens","OSL"],["TTFT_ms","TTFT"],["Latency_s","LAT"],["TPS","TPS"]]
+        .forEach(([c,k])=>{const v=parseFloat(o[c]); if(!isNaN(v)) by[s][k].push(v);});
+    }});
+    return {live:true,by};
+  }catch(e){ return {live:false,by:SHAPE_FALLBACK}; }
+}
+const SHAPE_EXPECT={SISO:"lowest all",SILO:"high latency, low TTFT",LISO:"high TTFT, low latency",LILO:"highest TTFT + latency"};
+function renderShapes(res){
+  const by=res.by||SHAPE_FALLBACK;
+  let h="<tr><th>Shape</th><th>I/O</th><th>Avg ISL (tok)</th><th>Avg OSL (tok)</th><th>Avg TTFT (ms)</th><th>Avg Latency (s)</th><th>Avg TPS</th><th>Expected</th></tr>";
+  const ttft={},lat={};
+  SHAPE_ORDER.forEach(s=>{const d=by[s]||{}; const info=SHAPE_INFO[s];
+    ttft[s]=mean(d.TTFT||[]); lat[s]=mean(d.LAT||[]);
+    h+="<tr><td><b>"+s+"</b></td><td>"+info.io+"</td><td class='n'>"+fmt(mean(d.ISL||[]),0)+"</td><td class='n'>"+fmt(mean(d.OSL||[]),0)+"</td><td class='n'>"+fmt(ttft[s],0)+"</td><td class='n'>"+fmt(lat[s],2)+"</td><td class='n'>"+fmt(mean(d.TPS||[]),0)+"</td><td>"+SHAPE_EXPECT[s]+"</td></tr>";
+  });
+  document.getElementById("shapesTable").innerHTML=h;
+  // Actual-vs-expected verdict
+  const v=document.getElementById("shapesVerdict");
+  const valid=SHAPE_ORDER.filter(s=>!isNaN(ttft[s])&&!isNaN(lat[s]));
+  if(valid.length<4){ v.innerHTML="Run the test on all four shapes (and add the Shapes CSV link) to compare against the expected pattern."; return; }
+  const maxT=SHAPE_ORDER.reduce((a,b)=>ttft[b]>ttft[a]?b:a);
+  const maxL=SHAPE_ORDER.reduce((a,b)=>lat[b]>lat[a]?b:a);
+  const tOK=["LISO","LILO"].includes(maxT), lOK=["SILO","LILO"].includes(maxL);
+  const pre=res.live?"":"<b>Representative example</b> (add your Shapes CSV link in Step 5 for your real data). ";
+  v.innerHTML=pre+(tOK&&lOK?"✅ <b>Matches the expected pattern.</b> ":"⚠️ <b>Does not fully match the textbook pattern.</b> ")
+    +"Highest <b>TTFT</b> is on <b>"+maxT+"</b> "+(tOK?"(long input → prefill, as expected)":"(expected LISO or LILO)")
+    +"; highest <b>latency</b> is on <b>"+maxL+"</b> "+(lOK?"(long output → decode, as expected)":"(expected SILO or LILO)")
+    +". "+((tOK&&lOK)?"The prefill/decode model holds on your hardware.":"If the background clients were still streaming, re-run paused for a clean comparison.");
 }
 loadAll();
 </script>
