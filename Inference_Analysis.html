@@ -291,7 +291,7 @@ function renderShapes(res){
   v.innerHTML=pre+(tOK&&lOK?"✅ <b>Matches the expected pattern.</b> ":"⚠️ <b>Does not fully match the textbook pattern.</b> ")
     +"Highest <b>TTFT</b> is on <b>"+maxT+"</b> "+(tOK?"(long input → prefill, as expected)":"(expected LISO or LILO)")
     +"; highest <b>latency</b> is on <b>"+maxL+"</b> "+(lOK?"(long output → decode, as expected)":"(expected SILO or LILO)")
-    +". "+((tOK&&lOK)?"The prefill/decode model holds on your hardware.":"If the background clients were still streaming, re-run paused for a clean comparison.");
+    +". "+((tOK&&lOK)?"The prefill/decode model holds on your hardware.":"");
 }
 loadAll();
 </script>
